@@ -1,7 +1,7 @@
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-
 namespace: petclinic-cicd
+
+commonAnnotations:
+  argocd.argoproj.io/sync-wave: "1"
 
 # Nexus secret (username and password) and sonar host.
 resources:
@@ -20,6 +20,3 @@ configMapGenerator:
   - name: maven-settings-cm
     files:
       - settings.xml
-
-commonAnnotations:
-  argocd.argoproj.io/sync-wave: "1"

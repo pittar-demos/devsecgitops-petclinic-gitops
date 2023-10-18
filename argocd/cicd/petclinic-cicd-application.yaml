@@ -10,15 +10,15 @@ metadata:
   labels:
     gitops.ownedBy: gitops
     category: apps
-  name: petclinic-test
+  name: petclinic-cicd
 spec:
   destination:
-    namespace: petclinc-test
+    namespace: petclinc-cicd
     server: https://kubernetes.default.svc
-  project: default
+  project: petclinic
   source:
-    path: devs/petclinic/overlays/test
-    repoURL: https://github.com/pittar-demos/devsecops-minimal.git
+    path: overlays/cicd
+    repoURL: http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git
     targetRevision: main
   syncPolicy:
     automated:

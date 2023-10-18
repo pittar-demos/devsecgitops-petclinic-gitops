@@ -1,0 +1,4 @@
+namespace: gitops
+
+resources:
+  - petclinic-prod-application.yaml

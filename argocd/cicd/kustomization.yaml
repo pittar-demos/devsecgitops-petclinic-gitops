@@ -1,4 +1,4 @@
 namespace: gitops
 
 resources:
-  - petclinic-cicd.yaml
+  - petclinic-cicd-application.yaml
