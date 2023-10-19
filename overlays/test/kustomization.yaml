@@ -1,4 +1,6 @@
-bases:
+namespace: petclinic-test
+
+resources:
   - ../../base/
 
 images:
