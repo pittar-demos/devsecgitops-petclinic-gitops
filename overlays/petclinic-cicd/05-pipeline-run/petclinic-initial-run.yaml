@@ -1,0 +1,23 @@
+apiVersion: tekton.dev/v1beta1
+kind: PipelineRun
+metadata:
+  name: petclinic-initial-run
+spec:
+  params:
+    - name: app-name
+      value: petclinic
+    - name: git-url
+      value: 'https://github.com/pittar/spring-petclinic.git'
+    - name: git-revision
+      value: log4j
+    - name: acs-secret
+      value: roxsecrets
+  pipelineRef:
+    name: build-and-rollout
+  workspaces:
+    - name: shared-workspace
+      persistentVolumeClaim:
+        claimName: workspace
+    - configMap:
+        name: maven-settings-cm
+      name: maven-settings-cm

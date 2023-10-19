@@ -1,0 +1,7 @@
+bases:
+  - ../../base/
+
+images:
+  - name: petclinic
+    newName: quay.io/pittar/petclinic
+    newTag: metrics

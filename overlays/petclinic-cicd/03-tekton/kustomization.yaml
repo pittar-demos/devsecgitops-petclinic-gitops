@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+commonAnnotations:
+  argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+  argocd.argoproj.io/sync-wave: "2"
+
+bases:
+  - github.com/redhat-cop/gitops-catalog/openshift-pipelines-tasks/rollout-restart/base?ref=v0.3
+  - github.com/redhat-cop/gitops-catalog/openshift-pipelines-tasks/maven/overlays/m2-cache?ref=main
+  - github.com/redhat-cop/gitops-catalog/openshift-pipelines-tasks/s2i-binary-build/base?ref=v0.3
+
+resources:
+  - 01-workspace-pvc.yaml
+  - 01-m2-cache-pvc.yaml
+  - 02-build-and-rollout-pipeline.yaml
+  - 03-rox-image-check-task.yaml
+  - 04-rox-image-scan-task.yaml
+  - 05-binary-s2i-task.yaml
