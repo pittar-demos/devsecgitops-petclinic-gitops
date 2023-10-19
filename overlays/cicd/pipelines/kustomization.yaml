@@ -1,2 +1,3 @@
 resources:
-  - build-app-pipeline.yaml
+  - build-app.yaml
+  - release-app.yaml

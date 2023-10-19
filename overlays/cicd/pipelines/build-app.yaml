@@ -1,0 +1,158 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: build-app
+spec:
+  params:
+    - default: quay.io/pittar/petclinic-demo
+      description: External registry location to copy image to
+      name: image_dest_url
+      type: string
+  tasks:
+    - name: git-clone
+      params:
+        - name: url
+          value: 'https://github.com/pittar/spring-petclinic.git'
+        - name: revision
+          value: master
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: source
+    - name: maven
+      params:
+        - name: MAVEN_IMAGE
+          value: 'quay.io/pittar/openjdk17-git:main'
+        - name: GOALS
+          value: 'package'
+        - name: GIT_ENABLED
+          value: 'true'
+        - name: CONTEXT_DIR
+          value: .
+      runAfter:
+        - git-clone
+      taskRef:
+        kind: ClusterTask
+        name: super-maven
+      workspaces:
+        - name: source
+          workspace: source
+        - name: maven-settings
+          workspace: maven-settings
+    - name: maven-pom-version
+      params:
+        - name: MAVEN_IMAGE
+          value: 'quay.io/pittar/openjdk17-git:main'
+        - name: VERSION_TYPE
+          value: snapshot
+        - name: MAVEN_MIRROR_URL
+          value: ''
+        - name: SERVER_USER
+          value: ''
+        - name: SERVER_PASSWORD
+          value: ''
+        - name: PROXY_USER
+          value: ''
+        - name: PROXY_PASSWORD
+          value: ''
+        - name: PROXY_PORT
+          value: ''
+        - name: PROXY_HOST
+          value: ''
+        - name: PROXY_NON_PROXY_HOSTS
+          value: ''
+        - name: PROXY_PROTOCOL
+          value: http
+        - name: CONTEXT_DIR
+          value: .
+      runAfter:
+        - maven
+      taskRef:
+        kind: ClusterTask
+        name: maven-pom-version
+      workspaces:
+        - name: source
+          workspace: source
+        - name: maven-settings
+          workspace: maven-settings
+    - name: buildah
+      params:
+        - name: IMAGE
+          value: '$(params.image_dest_url):latest'
+        - name: STORAGE_DRIVER
+          value: vfs
+        - name: DOCKERFILE
+          value: ./Containerfile
+        - name: CONTEXT
+          value: .
+        - name: TLSVERIFY
+          value: 'true'
+        - name: FORMAT
+          value: oci
+        - name: BUILD_EXTRA_ARGS
+          value: ''
+        - name: PUSH_EXTRA_ARGS
+          value: ''
+        - name: SKIP_PUSH
+          value: 'false'
+      runAfter:
+        - maven-pom-version
+      taskRef:
+        kind: ClusterTask
+        name: buildah
+      workspaces:
+        - name: source
+          workspace: source
+    - name: skopeo-copy
+      params:
+        - name: srcImageURL
+          value: 'docker://$(params.image_dest_url):latest'
+        - name: destImageURL
+          value: >-
+            docker://$(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)
+        - name: srcTLSverify
+          value: 'true'
+        - name: destTLSverify
+          value: 'true'
+      runAfter:
+        - buildah
+      taskRef:
+        kind: ClusterTask
+        name: skopeo-copy
+      workspaces:
+        - name: images-url
+          workspace: source
+    - name: acs-image-scan
+      params:
+        - name: image
+          value: >-
+            $(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)
+        - name: output_format
+          value: table
+      runAfter:
+        - skopeo-copy
+      taskRef:
+        kind: ClusterTask
+        name: acs-image-scan
+      workspaces:
+        - name: acs-central
+          workspace: acs-central
+    - name: acs-image-check
+      params:
+        - name: image
+          value: >-
+            $(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)
+      runAfter:
+        - acs-image-scan
+      taskRef:
+        kind: ClusterTask
+        name: acs-image-check
+      workspaces:
+        - name: acs-central
+          workspace: acs-central
+  workspaces:
+    - name: source
+    - name: maven-settings
+    - name: acs-central
