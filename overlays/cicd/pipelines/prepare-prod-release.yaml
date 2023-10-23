@@ -1,0 +1,105 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: prepare-prod-release
+spec:
+  params:
+    - default: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git'
+      description: Source repository url.
+      name: gitops-repo-url
+      type: string
+    - default: quay.io/pittar/petclinic-demo
+      description: Image to deploy.
+      name: image_url
+      type: string
+    - description: Image tag to deploy.
+      name: image_tag
+      type: string
+  tasks:
+    - name: git-clone-gitops
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.gitops-repo-url)
+        - name: revision
+          value: main
+      workspaces:
+        - name: output
+          workspace: gitops
+    - name: branch
+      taskRef:
+        kind: ClusterTask
+        name: git-cli
+      runAfter:
+        - acs-image-check
+      params:
+        - name: commands
+          value: |
+            git checkout -b $(params.image_tag)
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: kustomize
+      taskRef:
+        kind: ClusterTask
+        name: kustomize
+      runAfter:
+        - branch
+      params:
+        - name: image-name
+          value: petclinic
+        - name: new-image-name
+          value: $(params.image_url)
+        - name: new-tag
+          value: $(params.image_tag)
+        - name: overlaypath
+          value: overlays/prod
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: push-branch
+      taskRef:
+        kind: ClusterTask
+        name: git-cli
+      runAfter:
+        - kustomize
+      params:
+        - name: commands
+          value: |
+            git config --global user.email "pipeline@tekton.io"
+            git add -u
+            git commit -m "Pushing branch $(params.image_tag)"
+            git push origin $(params.image_tag)
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: gitea-create-pr
+      taskRef:
+        kind: ClusterTask
+        name: gitea-create-pr
+      runAfter:
+        - push-branch
+      params:
+        - name: title
+          value: Prepare version $(params.image_tag)
+        - name: body
+          value: Prepare version $(params.image_tag).
+        - name: password
+          value: openshift
+        - name: username
+          value: developer
+        - name: email
+          value: pipeline@tekton.io
+        - name: giteasrv
+          value: 'http://gitea.scm.svc.cluster.local:3000'
+        - name: gitref
+          value: main
+        - name: tagref
+          value: $(params.image_tag)
+      workspaces:
+        - name: source
+          workspace: gitops
+  workspaces:
+    - name: gitops

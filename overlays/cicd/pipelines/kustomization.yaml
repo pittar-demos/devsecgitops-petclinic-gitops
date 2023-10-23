@@ -1,3 +1,5 @@
 resources:
-  - build-app.yaml
-  - release-app.yaml
+  - build-and-deploy-dev.yaml
+  - release.yaml
+  - prepare-prod-release.yaml
+  - deploy-to-test.yaml

@@ -1,7 +1,7 @@
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
-  name: release-app
+  name: release
 spec:
   params:
     - default: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic.git'
@@ -41,33 +41,13 @@ spec:
       workspaces:
         - name: output
           workspace: gitops
-    - name: maven
-      taskRef:
-        kind: ClusterTask
-        name: super-maven
-      runAfter:
-        - git-clone-source
-        - git-clone-gitops
-      params:
-        - name: MAVEN_IMAGE
-          value: 'quay.io/pittar/openjdk17-git:main'
-        - name: GOALS
-          value: 'release:prepare release:perform'
-        - name: GIT_ENABLED
-          value: 'true'
-        - name: CONTEXT_DIR
-          value: .
-      workspaces:
-        - name: source
-          workspace: source
-        - name: maven-settings
-          workspace: maven-settings
     - name: maven-pom-version
       taskRef:
         kind: ClusterTask
         name: maven-pom-version
       runAfter:
-        - maven
+        - git-clone-source
+        - git-clone-gitops
       params:
         - name: MAVEN_IMAGE
           value: 'quay.io/pittar/openjdk17-git:main'
@@ -80,12 +60,32 @@ spec:
           workspace: source
         - name: maven-settings
           workspace: maven-settings
+    - name: maven
+      taskRef:
+        kind: ClusterTask
+        name: super-maven
+      runAfter:
+        - maven-pom-version
+      params:
+        - name: MAVEN_IMAGE
+          value: 'quay.io/pittar/openjdk17-git:main'
+        - name: GOALS
+          value: 'release:prepare release:perform -DskipTests -Darguments=-DskipTests'
+        - name: GIT_ENABLED
+          value: 'true'
+        - name: CONTEXT_DIR
+          value: .
+      workspaces:
+        - name: source
+          workspace: source
+        - name: maven-settings
+          workspace: maven-settings
     - name: buildah
       taskRef:
         kind: ClusterTask
         name: buildah
       runAfter:
-        - maven-pom-version
+        - maven
       params:
         - name: IMAGE
           value: '$(params.image_dest_url):latest'
@@ -151,25 +151,12 @@ spec:
       workspaces:
         - name: acs-central
           workspace: acs-central
-    - name: branch
-      taskRef:
-        kind: ClusterTask
-        name: git-cli
-      runAfter:
-        - acs-image-check
-      params:
-        - name: commands
-          value: |
-            git checkout -b $(tasks.maven-pom-version.results.pom-version)
-      workspaces:
-        - name: source
-          workspace: gitops
     - name: kustomize
       taskRef:
         kind: ClusterTask
         name: kustomize
       runAfter:
-        - branch
+        - acs-image-check
       params:
         - name: image-name
           value: petclinic
@@ -178,11 +165,11 @@ spec:
         - name: new-tag
           value: $(tasks.maven-pom-version.results.pom-version)
         - name: overlaypath
-          value: overlays/dev
+          value: overlays/prod
       workspaces:
         - name: source
           workspace: gitops
-    - name: push-branch
+    - name: push-dev-update
       taskRef:
         kind: ClusterTask
         name: git-cli
@@ -193,37 +180,26 @@ spec:
           value: |
             git config --global user.email "pipeline@tekton.io"
             git add -u
-            git commit -m "Pushing"
-            git push origin $(tasks.maven-pom-version.results.pom-version)
+            git commit -m "Pushing release version to dev."
+            git push origin main
       workspaces:
         - name: source
           workspace: gitops
-    - name: gitea-create-pr
+    - name: argocd-task-sync-and-wait
+      params:
+        - name: application-name
+          value: petclinic-dev
+        - name: revision
+          value: main
+        - name: flags
+          value: '--grpc-web'
+        - name: argocd-version
+          value: v2.2.2
+      runAfter:
+        - push-dev-update
       taskRef:
         kind: ClusterTask
-        name: gitea-create-pr
-      runAfter:
-        - push-branch
-      params:
-        - name: title
-          value: Test
-        - name: body
-          value: Test some more
-        - name: password
-          value: openshift
-        - name: username
-          value: developer
-        - name: email
-          value: pipeline@tekton.io
-        - name: giteasrv
-          value: 'http://gitea.scm.svc.cluster.local:3000'
-        - name: gitref
-          value: main
-        - name: tagref
-          value: $(tasks.maven-pom-version.results.pom-version)
-      workspaces:
-        - name: source
-          workspace: gitops
+        name: argocd-task-sync-and-wait
   workspaces:
     - name: source
     - name: gitops

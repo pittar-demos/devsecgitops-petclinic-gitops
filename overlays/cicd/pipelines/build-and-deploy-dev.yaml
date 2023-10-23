@@ -51,57 +51,41 @@ spec:
       workspaces:
         - name: source
           workspace: source
-    - name: maven
-      params:
-        - name: MAVEN_IMAGE
-          value: 'quay.io/pittar/openjdk17-git:main'
-        - name: GOALS
-          value: 'release:prepare release:perform'
-        - name: GIT_ENABLED
-          value: 'true'
-        - name: CONTEXT_DIR
-          value: .
-      runAfter:
-        - generate-id
-      taskRef:
-        kind: ClusterTask
-        name: super-maven
-      workspaces:
-        - name: source
-          workspace: source
-        - name: maven-settings
-          workspace: maven-settings
     - name: maven-pom-version
       params:
         - name: MAVEN_IMAGE
           value: 'quay.io/pittar/openjdk17-git:main'
         - name: VERSION_TYPE
           value: snapshot
-        - name: MAVEN_MIRROR_URL
-          value: ''
-        - name: SERVER_USER
-          value: ''
-        - name: SERVER_PASSWORD
-          value: ''
-        - name: PROXY_USER
-          value: ''
-        - name: PROXY_PASSWORD
-          value: ''
-        - name: PROXY_PORT
-          value: ''
-        - name: PROXY_HOST
-          value: ''
-        - name: PROXY_NON_PROXY_HOSTS
-          value: ''
         - name: PROXY_PROTOCOL
           value: http
         - name: CONTEXT_DIR
           value: .
       runAfter:
-        - maven
+        - generate-id
       taskRef:
         kind: ClusterTask
         name: maven-pom-version
+      workspaces:
+        - name: source
+          workspace: source
+        - name: maven-settings
+          workspace: maven-settings
+    - name: maven
+      params:
+        - name: MAVEN_IMAGE
+          value: 'quay.io/pittar/openjdk17-git:main'
+        - name: GOALS
+          value: 'package'
+        - name: GIT_ENABLED
+          value: 'true'
+        - name: CONTEXT_DIR
+          value: .
+      runAfter:
+        - maven-pom-version
+      taskRef:
+        kind: ClusterTask
+        name: super-maven
       workspaces:
         - name: source
           workspace: source
@@ -128,7 +112,7 @@ spec:
         - name: SKIP_PUSH
           value: 'false'
       runAfter:
-        - maven-pom-version
+        - maven
       taskRef:
         kind: ClusterTask
         name: buildah

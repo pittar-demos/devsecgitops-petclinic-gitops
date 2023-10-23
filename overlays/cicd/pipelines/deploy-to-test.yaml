@@ -1,0 +1,81 @@
+apiVersion: tekton.dev/v1beta1
+kind: Pipeline
+metadata:
+  name: deploy-to-test
+spec:
+  params:
+    - default: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git'
+      description: Source repository url.
+      name: gitops-repo-url
+      type: string
+    - default: quay.io/pittar/petclinic-demo
+      description: Image to deploy.
+      name: image_url
+      type: string
+    - description: Image tag to deploy.
+      name: image_tag
+      type: string
+  tasks:
+    - name: git-clone-gitops
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.gitops-repo-url)
+        - name: revision
+          value: main
+      workspaces:
+        - name: output
+          workspace: gitops
+    - name: kustomize
+      taskRef:
+        kind: ClusterTask
+        name: kustomize
+      runAfter:
+        - git-clone-gitops
+      params:
+        - name: image-name
+          value: petclinic
+        - name: new-image-name
+          value: $(params.image_url)
+        - name: new-tag
+          value: $(params.image_tag)
+        - name: overlaypath
+          value: overlays/test
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: push-test-update
+      taskRef:
+        kind: ClusterTask
+        name: git-cli
+      runAfter:
+        - kustomize
+      params:
+        - name: commands
+          value: |
+            git config --global user.email "pipeline@tekton.io"
+            git add -u
+            git commit -m "Pushing"
+            git push origin main
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: argocd-task-sync-and-wait
+      params:
+        - name: application-name
+          value: petclinic-test
+        - name: revision
+          value: main
+        - name: flags
+          value: '--grpc-web'
+        - name: argocd-version
+          value: v2.2.2
+      runAfter:
+        - push-test-update
+      taskRef:
+        kind: ClusterTask
+        name: argocd-task-sync-and-wait
+  workspaces:
+    - name: gitops
