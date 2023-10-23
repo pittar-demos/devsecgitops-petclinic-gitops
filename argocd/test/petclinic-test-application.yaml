@@ -21,9 +21,6 @@ spec:
     repoURL: http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git
     targetRevision: main
   syncPolicy:
-    automated:
-      prune: false
-      selfHeal: true
     syncOptions:
       - ApplyOutOfSyncOnly=true
     retry:
