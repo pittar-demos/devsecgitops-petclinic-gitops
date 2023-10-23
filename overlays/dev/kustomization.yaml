@@ -7,6 +7,3 @@ images:
   - name: petclinic
     newName: quay.io/pittar/petclinic
     newTag: metrics
-#  - name: petclinic
-#    newName: image-registry.openshift-image-registry.svc:5000/petclinic-cicd/petclinic
-#    newTag: dev

@@ -1,27 +1,53 @@
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
-  name: build-app
+  name: release-app
 spec:
   params:
+    - default: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic.git'
+      description: Source repository url.
+      name: git-repo-url
+      type: string
+    - default: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git'
+      description: Source repository url.
+      name: gitops-repo-url
+      type: string
     - default: quay.io/pittar/petclinic-demo
       description: External registry location to copy image to
       name: image_dest_url
       type: string
   tasks:
-    - name: git-clone
-      params:
-        - name: url
-          value: 'https://github.com/pittar/spring-petclinic.git'
-        - name: revision
-          value: master
+    - name: git-clone-source
       taskRef:
         kind: ClusterTask
         name: git-clone
+      params:
+        - name: url
+          value: $(params.git-repo-url)
+        - name: revision
+          value: master
       workspaces:
         - name: output
           workspace: source
+    - name: git-clone-gitops
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      params:
+        - name: url
+          value: $(params.gitops-repo-url)
+        - name: revision
+          value: main
+      workspaces:
+        - name: output
+          workspace: gitops
     - name: maven
+      taskRef:
+        kind: ClusterTask
+        name: super-maven
+      runAfter:
+        - git-clone-source
+        - git-clone-gitops
       params:
         - name: MAVEN_IMAGE
           value: 'quay.io/pittar/openjdk17-git:main'
@@ -31,53 +57,35 @@ spec:
           value: 'true'
         - name: CONTEXT_DIR
           value: .
-      runAfter:
-        - git-clone
-      taskRef:
-        kind: ClusterTask
-        name: super-maven
       workspaces:
         - name: source
           workspace: source
         - name: maven-settings
           workspace: maven-settings
     - name: maven-pom-version
+      taskRef:
+        kind: ClusterTask
+        name: maven-pom-version
+      runAfter:
+        - maven
       params:
         - name: MAVEN_IMAGE
           value: 'quay.io/pittar/openjdk17-git:main'
         - name: VERSION_TYPE
-          value: snapshot
-        - name: MAVEN_MIRROR_URL
-          value: ''
-        - name: SERVER_USER
-          value: ''
-        - name: SERVER_PASSWORD
-          value: ''
-        - name: PROXY_USER
-          value: ''
-        - name: PROXY_PASSWORD
-          value: ''
-        - name: PROXY_PORT
-          value: ''
-        - name: PROXY_HOST
-          value: ''
-        - name: PROXY_NON_PROXY_HOSTS
-          value: ''
-        - name: PROXY_PROTOCOL
-          value: http
+          value: 'release'
         - name: CONTEXT_DIR
           value: .
-      runAfter:
-        - maven
-      taskRef:
-        kind: ClusterTask
-        name: maven-pom-version
       workspaces:
         - name: source
           workspace: source
         - name: maven-settings
           workspace: maven-settings
     - name: buildah
+      taskRef:
+        kind: ClusterTask
+        name: buildah
+      runAfter:
+        - maven-pom-version
       params:
         - name: IMAGE
           value: '$(params.image_dest_url):latest'
@@ -91,21 +99,17 @@ spec:
           value: 'true'
         - name: FORMAT
           value: oci
-        - name: BUILD_EXTRA_ARGS
-          value: ''
-        - name: PUSH_EXTRA_ARGS
-          value: ''
         - name: SKIP_PUSH
           value: 'false'
-      runAfter:
-        - maven-pom-version
-      taskRef:
-        kind: ClusterTask
-        name: buildah
       workspaces:
         - name: source
           workspace: source
     - name: skopeo-copy
+      taskRef:
+        kind: ClusterTask
+        name: skopeo-copy
+      runAfter:
+        - buildah
       params:
         - name: srcImageURL
           value: 'docker://$(params.image_dest_url):latest'
@@ -116,43 +120,112 @@ spec:
           value: 'true'
         - name: destTLSverify
           value: 'true'
-      runAfter:
-        - buildah
-      taskRef:
-        kind: ClusterTask
-        name: skopeo-copy
       workspaces:
         - name: images-url
           workspace: source
     - name: acs-image-scan
+      taskRef:
+        kind: ClusterTask
+        name: acs-image-scan
+      runAfter:
+        - skopeo-copy
       params:
         - name: image
           value: >-
             $(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)
         - name: output_format
           value: table
-      runAfter:
-        - skopeo-copy
-      taskRef:
-        kind: ClusterTask
-        name: acs-image-scan
       workspaces:
         - name: acs-central
           workspace: acs-central
     - name: acs-image-check
+      taskRef:
+        kind: ClusterTask
+        name: acs-image-check
+      runAfter:
+        - acs-image-scan
       params:
         - name: image
           value: >-
             $(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)
-      runAfter:
-        - acs-image-scan
-      taskRef:
-        kind: ClusterTask
-        name: acs-image-check
       workspaces:
         - name: acs-central
           workspace: acs-central
+    - name: branch
+      taskRef:
+        kind: ClusterTask
+        name: git-cli
+      runAfter:
+        - acs-image-check
+      params:
+        - name: commands
+          value: |
+            git checkout -b $(tasks.maven-pom-version.results.pom-version)
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: kustomize
+      taskRef:
+        kind: ClusterTask
+        name: kustomize
+      runAfter:
+        - branch
+      params:
+        - name: image-name
+          value: petclinic
+        - name: new-image-name
+          value: $(params.image_dest_url)
+        - name: new-tag
+          value: $(tasks.maven-pom-version.results.pom-version)
+        - name: overlaypath
+          value: overlays/dev
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: push-branch
+      taskRef:
+        kind: ClusterTask
+        name: git-cli
+      runAfter:
+        - kustomize
+      params:
+        - name: commands
+          value: |
+            git config --global user.email "pipeline@tekton.io"
+            git add -u
+            git commit -m "Pushing"
+            git push origin $(tasks.maven-pom-version.results.pom-version)
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: gitea-create-pr
+      taskRef:
+        kind: ClusterTask
+        name: gitea-create-pr
+      runAfter:
+        - push-branch
+      params:
+        - name: title
+          value: Test
+        - name: body
+          value: Test some more
+        - name: password
+          value: openshift
+        - name: username
+          value: developer
+        - name: email
+          value: pipeline@tekton.io
+        - name: giteasrv
+          value: 'http://gitea.scm.svc.cluster.local:3000'
+        - name: gitref
+          value: main
+        - name: tagref
+          value: $(tasks.maven-pom-version.results.pom-version)
+      workspaces:
+        - name: source
+          workspace: gitops
   workspaces:
     - name: source
+    - name: gitops
     - name: maven-settings
     - name: acs-central

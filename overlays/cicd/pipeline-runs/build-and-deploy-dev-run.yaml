@@ -5,6 +5,11 @@ metadata:
 spec:
   pipelineRef:
     name: build-app
+  params:
+    - name: git-repo-url
+      value: 'https://gitea-scm.apps.cluster-xlzjk.xlzjk.sandbox1013.opentlc.com/developer/petclinic.git'
+    - name: gitops-repo-url
+      value: 'https://gitea-scm.apps.cluster-xlzjk.xlzjk.sandbox1013.opentlc.com/developer/petclinic-gitops.git'
   taskRunTemplate:
     podTemplate:
       env:
@@ -37,12 +42,12 @@ spec:
     - name: source
       persistentVolumeClaim:
         claimName: workspace
+    - name: gitops
+      persistentVolumeClaim:
+        claimName: gitops-source
     - configMap:
         name: maven-settings-cm
       name: maven-settings
-    - name: quay-credentials
-      secret:
-        secretName: pittar-devsecops-pull-secret
     - name: acs-central
       secret:
         secretName: roxsecrets

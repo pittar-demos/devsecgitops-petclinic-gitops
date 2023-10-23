@@ -1,18 +1,26 @@
 apiVersion: tekton.dev/v1beta1
 kind: Pipeline
 metadata:
-  name: build-app
+  name: build-and-deploy-dev
 spec:
   params:
+    - default: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic.git'
+      description: Source repository url.
+      name: git-repo-url
+      type: string
+    - default: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git'
+      description: Source repository url.
+      name: gitops-repo-url
+      type: string
     - default: quay.io/pittar/petclinic-demo
       description: External registry location to copy image to
       name: image_dest_url
       type: string
   tasks:
-    - name: git-clone
+    - name: git-clone-source
       params:
         - name: url
-          value: 'https://github.com/pittar/spring-petclinic.git'
+          value: $(params.git-repo-url)
         - name: revision
           value: master
       taskRef:
@@ -21,18 +29,40 @@ spec:
       workspaces:
         - name: output
           workspace: source
+    - name: git-clone-gitops
+      params:
+        - name: url
+          value: $(params.gitops-repo-url)
+        - name: revision
+          value: main
+      taskRef:
+        kind: ClusterTask
+        name: git-clone
+      workspaces:
+        - name: output
+          workspace: gitops
+    - name: generate-id
+      runAfter:
+        - git-clone-source
+        - git-clone-gitops
+      taskRef:
+        kind: ClusterTask
+        name: generate-id
+      workspaces:
+        - name: source
+          workspace: source
     - name: maven
       params:
         - name: MAVEN_IMAGE
           value: 'quay.io/pittar/openjdk17-git:main'
         - name: GOALS
-          value: 'package'
+          value: 'release:prepare release:perform'
         - name: GIT_ENABLED
           value: 'true'
         - name: CONTEXT_DIR
           value: .
       runAfter:
-        - git-clone
+        - generate-id
       taskRef:
         kind: ClusterTask
         name: super-maven
@@ -111,7 +141,7 @@ spec:
           value: 'docker://$(params.image_dest_url):latest'
         - name: destImageURL
           value: >-
-            docker://$(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)
+            docker://$(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)-$(tasks.generate-id.results.short-commit)
         - name: srcTLSverify
           value: 'true'
         - name: destTLSverify
@@ -128,7 +158,7 @@ spec:
       params:
         - name: image
           value: >-
-            $(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)
+            $(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)-$(tasks.generate-id.results.short-commit)
         - name: output_format
           value: table
       runAfter:
@@ -143,7 +173,7 @@ spec:
       params:
         - name: image
           value: >-
-            $(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)
+            $(params.image_dest_url):$(tasks.maven-pom-version.results.pom-version)-$(tasks.generate-id.results.short-commit)
       runAfter:
         - acs-image-scan
       taskRef:
@@ -152,7 +182,59 @@ spec:
       workspaces:
         - name: acs-central
           workspace: acs-central
+    - name: kustomize
+      params:
+        - name: image-name
+          value: petclinic
+        - name: new-image-name
+          value: $(params.image_dest_url)
+        - name: new-tag
+          value: >-
+            $(tasks.maven-pom-version.results.pom-version)-$(tasks.generate-id.results.short-commit)
+        - name: overlaypath
+          value: overlays/dev
+      runAfter:
+        - acs-image-check
+      taskRef:
+        kind: ClusterTask
+        name: kustomize
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: push-dev-update
+      params:
+        - name: commands
+          value: |
+            git config --global user.email "pipeline@tekton.io"
+            git checkout main
+            git add -u
+            git commit -m "Pushing"
+            git push origin main
+      runAfter:
+        - kustomize
+      taskRef:
+        kind: ClusterTask
+        name: git
+      workspaces:
+        - name: source
+          workspace: gitops
+    - name: argocd-task-sync-and-wait
+      params:
+        - name: application-name
+          value: petclinic-dev
+        - name: revision
+          value: main
+        - name: flags
+          value: '--grpc-web'
+        - name: argocd-version
+          value: v2.2.2
+      runAfter:
+        - push-dev-update
+      taskRef:
+        kind: ClusterTask
+        name: argocd-task-sync-and-wait
   workspaces:
     - name: source
+    - name: gitops
     - name: maven-settings
     - name: acs-central
