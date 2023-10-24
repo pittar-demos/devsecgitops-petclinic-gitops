@@ -1,15 +1,15 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: build-app-
+  generateName: build-and-deploy-dev-
 spec:
   pipelineRef:
-    name: build-app
+    name: build-and-deploy-dev
   params:
     - name: git-repo-url
-      value: 'https://gitea-scm.apps.cluster-xlzjk.xlzjk.sandbox1013.opentlc.com/developer/petclinic.git'
+      value: 'https://gitea-scm.apps.cluster-sqjrc.sqjrc.sandbox739.opentlc.com/developer/petclinic.git'
     - name: gitops-repo-url
-      value: 'https://gitea-scm.apps.cluster-xlzjk.xlzjk.sandbox1013.opentlc.com/developer/petclinic-gitops.git'
+      value: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git'
   taskRunTemplate:
     podTemplate:
       env:
@@ -44,7 +44,7 @@ spec:
         claimName: workspace
     - name: gitops
       persistentVolumeClaim:
-        claimName: gitops-source
+        claimName: gitops
     - configMap:
         name: maven-settings-cm
       name: maven-settings

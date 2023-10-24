@@ -33,7 +33,7 @@ spec:
         kind: ClusterTask
         name: git-cli
       runAfter:
-        - acs-image-check
+        - git-clone-gitops
       params:
         - name: commands
           value: |
