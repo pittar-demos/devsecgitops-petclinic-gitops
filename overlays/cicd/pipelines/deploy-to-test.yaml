@@ -49,16 +49,17 @@ spec:
     - name: push-test-update
       taskRef:
         kind: ClusterTask
-        name: git-cli
+        name: git
       runAfter:
         - kustomize
       params:
         - name: commands
           value: |
             git config --global user.email "pipeline@tekton.io"
+            git checkout main
             git add -u
-            git commit -m "Pushing"
-            git push origin main
+            git commit -m "Pushing update to deploy $(params.image_tag) to test."
+            git push origin main 
       workspaces:
         - name: source
           workspace: gitops
