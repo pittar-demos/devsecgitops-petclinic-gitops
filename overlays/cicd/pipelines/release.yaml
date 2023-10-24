@@ -165,7 +165,7 @@ spec:
         - name: new-tag
           value: $(tasks.maven-pom-version.results.pom-version)
         - name: overlaypath
-          value: overlays/prod
+          value: overlays/dev
       workspaces:
         - name: source
           workspace: gitops

@@ -55,7 +55,7 @@ spec:
         - name: new-tag
           value: $(params.image_tag)
         - name: overlaypath
-          value: overlays/prod
+          value: overlays/test
       workspaces:
         - name: source
           workspace: gitops

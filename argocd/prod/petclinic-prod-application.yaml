@@ -10,14 +10,14 @@ metadata:
   labels:
     gitops.ownedBy: gitops
     category: apps
-  name: petclinic-test
+  name: petclinic-prod
 spec:
   destination:
-    namespace: petclinc-test
+    namespace: petclinc-prod
     server: https://kubernetes.default.svc
   project: petclinic
   source:
-    path: overlays/test
+    path: overlays/prod
     repoURL: http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git
     targetRevision: main
   syncPolicy:
