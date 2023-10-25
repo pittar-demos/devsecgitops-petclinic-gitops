@@ -1,13 +1,11 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  generateName: release-
+  generateName: prepare-prod-release-
 spec:
   pipelineRef:
-    name: release
+    name: prepare-prod-release
   params:
-    - name: git-repo-url
-      value: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic.git'
     - name: gitops-repo-url
       value: 'http://gitea.scm.svc.cluster.local:3000/developer/petclinic-gitops.git'
   taskRunTemplate:
@@ -39,15 +37,6 @@ spec:
               name: ci-config-secret
               key: GIT_PASSWORD
   workspaces:
-    - name: source
-      persistentVolumeClaim:
-        claimName: workspace
     - name: gitops
       persistentVolumeClaim:
         claimName: gitops
-    - configMap:
-        name: maven-settings-cm
-      name: maven-settings
-    - name: acs-central
-      secret:
-        secretName: roxsecrets

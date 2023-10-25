@@ -62,7 +62,7 @@ spec:
     - name: push-branch
       taskRef:
         kind: ClusterTask
-        name: git-cli
+        name: git
       runAfter:
         - kustomize
       params:
