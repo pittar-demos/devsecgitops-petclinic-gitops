@@ -21,7 +21,7 @@
       <mirror>
         <id>internal-repository</id>
         <name>Internal Nexus Maven Proxy</name>
-        <url>${env.MAVEN_SERVER_HOST}/content/groups/public</url>
+        <url>${env.MAVEN_SERVER_HOST}/repository/maven-public/</url>
         <mirrorOf>external:*</mirrorOf>
       </mirror>
     </mirrors>
@@ -29,8 +29,8 @@
       <profile>
         <id>nexus-internal</id>
         <properties>
-          <repository.snapshots>${env.MAVEN_SERVER_HOST}/content/repositories/snapshots</repository.snapshots>
-          <repository.releases>${env.MAVEN_SERVER_HOST}/content/repositories/releases</repository.releases>
+          <repository.snapshots>${env.MAVEN_SERVER_HOST}/repository/maven-snapshots/</repository.snapshots>
+          <repository.releases>${env.MAVEN_SERVER_HOST}/repository/maven-releases/</repository.releases>
         </properties>
         <repositories>
           <repository>

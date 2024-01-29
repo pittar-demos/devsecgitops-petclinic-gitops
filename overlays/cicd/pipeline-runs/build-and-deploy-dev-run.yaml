@@ -7,9 +7,9 @@ spec:
     name: build-and-deploy-dev
   params:
     - name: git-repo-url
-      value: 'https://gitea-scm.apps.cluster-sqjrc.sqjrc.sandbox739.opentlc.com/developer/petclinic.git'
+      value: 'https://gitea-scm.apps.cluster-wgdwz.dynamic.redhatworkshops.io/developer/petclinic'
     - name: gitops-repo-url
-      value: 'https://gitea-scm.apps.cluster-sqjrc.sqjrc.sandbox739.opentlc.com/developer/petclinic-gitops.git'
+      value: 'https://gitea-scm.apps.cluster-wgdwz.dynamic.redhatworkshops.io/developer/petclinic-gitops'
   taskRunTemplate:
     podTemplate:
       env:
